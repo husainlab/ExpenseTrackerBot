@@ -38,14 +38,11 @@ async def on_startup():
     await set_webhook()
     
     scheduler.add_job(
-        send_weekly_summaries,
-        "cron",
-        day_of_week="sun",
-        hour=23,
-        minute=59,
-        args=[application],
-        id="weekly_summaries",
-        replace_existing=True,
+
+    send_weekly_summaries, "interval",
+    minutes=2, args=[application],
+    id="weekly_summaries_test", replace_existing=True,
+
     )
     scheduler.start()
 
