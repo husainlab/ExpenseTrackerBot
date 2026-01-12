@@ -13,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from zoneinfo import ZoneInfo
 from app.scheduler import send_weekly_summaries
 
+
 scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Kolkata"))
 
 logging.basicConfig(level=logging.INFO)
@@ -33,18 +34,22 @@ async def set_webhook():
 
 async def on_startup():
     # IMPORTANT: initialize and start the PTB application
-    await application.initialize()
+   
+await application.initialize()
     await application.start()
     await set_webhook()
-    
+
+    # TEMP test: run every 2 minutes
     scheduler.add_job(
-
-    send_weekly_summaries, "interval",
-    minutes=2, args=[application],
-    id="weekly_summaries_test", replace_existing=True,
-
+        send_weekly_summaries,
+        "interval",
+        minutes=2,
+        args=[application],
+        id="weekly_summaries_test",
+        replace_existing=True,
     )
     scheduler.start()
+
 
 
 async def on_shutdown():
