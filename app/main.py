@@ -9,6 +9,12 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters
 from app.handlers import handle_message
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from zoneinfo import ZoneInfo
+from app.scheduler import send_weekly_summaries
+
+scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Kolkata"))
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -30,6 +36,19 @@ async def on_startup():
     await application.initialize()
     await application.start()
     await set_webhook()
+    
+    scheduler.add_job(
+        send_weekly_summaries,
+        "cron",
+        day_of_week="sun",
+        hour=23,
+        minute=59,
+        args=[application],
+        id="weekly_summaries",
+        replace_existing=True,
+    )
+    scheduler.start()
+
 
 async def on_shutdown():
     # IMPORTANT: stop & shutdown
