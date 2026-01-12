@@ -57,33 +57,52 @@ def write_expense(username: str, amount: float, category: str):
 
     df.to_excel(xlsx, index=False, engine="openpyxl")
 
+
 def git_commit_push(message: str):
     """
     Commit and push changes back to GitHub using the PAT stored as Render secret.
-    Safe approach:
-      - set user.name/email
-      - update remote URL to include PAT for this push (HTTPS)
-      - push HEAD to the default branch
+    Handles cases where the repository has no 'origin' remote (detached HEAD).
     """
     pat = os.getenv("GITHUB_PAT")
     repo_url = os.getenv("REPO_URL")  # e.g., https://github.com/husainlab/ExpenseTrackerBot2.git
     if not pat or not repo_url:
         return  # silently skip if not configured
 
-    # minimal git identity
+    # Minimal git identity
     subprocess.run(["git", "config", "user.email", "expensebot@local"], check=False)
     subprocess.run(["git", "config", "user.name", "ExpenseTrackerBot"], check=False)
 
-    # add & commit
-    subprocess.run(["git", "add", "data"], check=False)  # only data changes
+    # Ensure we are inside a git work-tree
+    inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
+                            capture_output=True, text=True)
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        # initialize a git repo if needed (rare on Render, but defensive)
+        subprocess.run(["git", "init"], check=False)
+
+    # Check if 'origin' exists
+    origin_exists = subprocess.run(["git", "remote", "get-url", "origin"],
+                                   capture_output=True, text=True)
+    if origin_exists.returncode != 0:
+        # Add origin if missing
+        subprocess.run(["git", "remote", "add", "origin", repo_url], check=False)
+
+    # Stage & commit just the data directory to keep noise low
+    subprocess.run(["git", "add", "data"], check=False)
+    # Allow commit to fail if nothing changed
     subprocess.run(["git", "commit", "-m", message], check=False)
 
-    # inject PAT into remote URL (avoid printing PAT)
+    # Temporarily inject PAT for push
     secure_url = repo_url.replace("https://", f"https://{pat}@")
     subprocess.run(["git", "remote", "set-url", "origin", secure_url], check=False)
 
-    # push HEAD (Render typically builds from main; HEAD push is fine)
-    subprocess.run(["git", "push", "origin", "HEAD"], check=False)
+    # Determine default branch (‘main’ is most common)
+    # Push HEAD to main; if your repo uses 'master', set REPO_BRANCH env var and use it here.
+    branch = os.getenv("REPO_BRANCH", "main")
+    # Create branch if detached
+    subprocess.run(["git", "branch", "-f", branch, "HEAD"], check=False)
 
-    # restore origin to clean URL (optional)
+    # Push
+    subprocess.run(["git", "push", "origin", f"{branch}:{branch}"], check=False)
+
+    # Restore non-secret remote URL
     subprocess.run(["git", "remote", "set-url", "origin", repo_url], check=False)
