@@ -1,3 +1,4 @@
+# app/main.py
 import os
 import logging
 from starlette.applications import Starlette
@@ -12,32 +13,38 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")  # Render provides the external URL for webhook
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")  # Render injects this
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 
-# Build PTB Application (async)
+# Build PTB application (async)
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 async def set_webhook():
-    # Telegram requires HTTPS webhook URL
     url = f"{RENDER_URL}{WEBHOOK_PATH}"
     logger.info(f"Setting webhook to {url}")
     await application.bot.set_webhook(url)
 
 async def on_startup():
+    # IMPORTANT: initialize and start the PTB application
+    await application.initialize()
+    await application.start()
     await set_webhook()
 
 async def on_shutdown():
-    await application.bot.delete_webhook()
+    # IMPORTANT: stop & shutdown
+    await application.stop()
+    await application.shutdown()
 
-# Endpoints
+# Health endpoint for Render + UptimeRobot
 async def health(_: Request):
-    return PlainTextResponse("OK")  # used by Render health checks & UptimeRobot pings
+    return PlainTextResponse("OK")
 
+# Telegram posts updates here
 async def webhook(request: Request):
     data = await request.json()
     update = Update.de_json(data, application.bot)
+    # process_update is safe now that initialize/start ran
     await application.process_update(update)
     return JSONResponse({"status": "processed"})
 
@@ -48,4 +55,3 @@ routes = [
 ]
 
 app = Starlette(routes=routes, on_startup=[on_startup], on_shutdown=[on_shutdown])
-
