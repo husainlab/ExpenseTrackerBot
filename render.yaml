@@ -2,15 +2,15 @@ services:
   - type: web
     name: expense-tracker-bot
     env: python
-    region: oregon
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: BOT_TOKEN        # Telegram token from @BotFather
+      - key: BOT_TOKEN
         sync: false
-      - key: ADMIN_CHAT_ID    # optional admin chat id
+      - key: REPO_URL
         sync: false
-``
-
+      - key: GITHUB_PAT
+        sync: false
+      - key: REPO_BRANCH
+        value: main
