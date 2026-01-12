@@ -45,12 +45,16 @@ async def on_startup():
 
     # ---- TEMP: fire every 2 minutes to verify summaries ----
     scheduler.add_job(
-        send_weekly_summaries,
-        "interval",
-        minutes=2,
-        args=[application],
-        id="weekly_summaries_test",
-        replace_existing=True,
+
+    send_weekly_summaries,
+    "cron",
+    day_of_week="sun",
+    hour=21,
+    minute=59,
+    args=[application],
+    id="weekly_summaries",
+    replace_existing=True,
+
     )
     scheduler.start()
     logger.info("Scheduler started (2-minute test job active).")
