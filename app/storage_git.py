@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 import pandas as pd
 from app.utils_time import now_ist, month_key, week_index_in_month
-
 # Render checks out the repo under /opt/render/project/src
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
@@ -44,9 +43,10 @@ def write_expense(username: str, amount: float, category: str):
 
     xlsx = month_dir / f"wk_{wk}.xlsx"
     row = {
-        "date_ist": ts.strftime("%Y-%m-%d %H:%M:%S"),
-        "amount": amount,
-        "category": category,
+    # include timezone offset so pandas parses as tz-aware later
+    "date_ist": ts.isoformat(),  # e.g., 2026-01-12T07:15:00+05:30
+    "amount": amount,
+    "category": category,
     }
 
     if xlsx.exists():
