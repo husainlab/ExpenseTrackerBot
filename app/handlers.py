@@ -115,62 +115,88 @@ async def send_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -----------------------------
 # Callback handler
 # -----------------------------
-
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    user_id = str(query.from_user.id)
-    chat_id = query.message.chat.id
+
+    user = query.from_user
+    user_id = str(user.id)
+    chat_id = update.effective_chat.id
     now = now_ist()
 
-    if query.data == "HELP":
-        await send_menu(update, context)
+    # 🔑 CRITICAL: ensure user context for button taps
+    ok = ensure_user_dir(user_id, chat_id, user.username or "")
+    if not ok:
+        await context.bot.send_message(chat_id=chat_id, text="User limit reached.")
         return
 
-    if query.data == "DELETE_INIT":
+    try:
+        if query.data == "HELP":
+            await send_menu(update, context)
+            return
+
+        if query.data == "DELETE_INIT":
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="⚠️ *This will permanently delete all your data.*\nAre you sure?",
+                parse_mode="Markdown",
+                reply_markup=build_delete_confirm_keyboard(),
+            )
+            return
+
+        if query.data == "DELETE_CANCEL":
+            await send_menu(update, context)
+            return
+
+        if query.data == "DELETE_CONFIRM":
+            delete_user_data(user_id)
+            git_commit_push(f"Delete data for {user_id}")
+            await context.bot.send_message(chat_id=chat_id, text="✅ Your data has been deleted.")
+            await send_menu(update, context)
+            return
+
+        # ---- Time-based queries ----
+        if query.data == "WEEK_THIS":
+            start, end = week_bounds(now)
+        elif query.data == "WEEK_LAST":
+            start, end = week_bounds(now - timedelta(days=7))
+        elif query.data == "MONTH_THIS":
+            start, end = month_bounds(now)
+        elif query.data == "MONTH_LAST":
+            prev = now.replace(day=1) - timedelta(days=1)
+            start, end = month_bounds(prev)
+        elif query.data == "DAY_TODAY":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now
+        elif query.data == "DAY_YESTERDAY":
+            y = now - timedelta(days=1)
+            start = y.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = y.replace(hour=23, minute=59, second=59)
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="ℹ️ Feature coming soon.")
+            return
+
+        df = load_expenses_between(user_id, start, end)
+        text = (
+            f"*Summary*\n"
+            f"{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')}\n\n"
+            f"{summarize_by_category(df)}"
+        )
+
         await context.bot.send_message(
             chat_id=chat_id,
-            text="⚠️ *This will permanently delete all your data.*\nAre you sure?",
+            text=text,
             parse_mode="Markdown",
-            reply_markup=build_delete_confirm_keyboard(),
         )
-        return
 
-    if query.data == "DELETE_CANCEL":
-        await send_menu(update, context)
-        return
+    except Exception as e:
+        # 🔍 NEVER fail silently on callbacks
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="⚠️ Something went wrong while processing your request.",
+        )
+        raise
 
-    if query.data == "DELETE_CONFIRM":
-        delete_user_data(user_id)
-        git_commit_push(f"Delete data for {user_id}")
-        await context.bot.send_message(chat_id=chat_id, text="✅ Your data has been deleted.")
-        await send_menu(update, context)
-        return
-
-    # ---- Time-based queries ----
-    if query.data == "WEEK_THIS":
-        start, end = week_bounds(now)
-    elif query.data == "WEEK_LAST":
-        start, end = week_bounds(now - timedelta(days=7))
-    elif query.data == "MONTH_THIS":
-        start, end = month_bounds(now)
-    elif query.data == "MONTH_LAST":
-        prev = now.replace(day=1) - timedelta(days=1)
-        start, end = month_bounds(prev)
-    elif query.data == "DAY_TODAY":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif query.data == "DAY_YESTERDAY":
-        y = now - timedelta(days=1)
-        start = y.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = y.replace(hour=23, minute=59, second=59)
-    else:
-        await context.bot.send_message(chat_id=chat_id, text="ℹ️ Feature coming soon.")
-        return
-
-    df = load_expenses_between(user_id, start, end)
-    text = f"*Summary*\n{start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')}\n\n{summarize_by_category(df)}"
-    await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
 
 # -----------------------------
 # Text handler (fallback)
