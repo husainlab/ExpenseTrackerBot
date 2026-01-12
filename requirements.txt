@@ -1,4 +1,10 @@
+# requirements.txt
 python-telegram-bot==22.5
 starlette==0.37.2
 uvicorn[standard]==0.32.0
 
+# Step 2 additions
+pandas==2.2.2
+openpyxl==3.1.5
+gitpython==3.1.43
+tzdata==2025.1
