@@ -1,45 +1,49 @@
-# app/main.py
+
 import os
 import logging
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse, JSONResponse
 from starlette.requests import Request
 from starlette.routing import Route
+
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters
-from app.handlers import handle_message
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from zoneinfo import ZoneInfo
+
+from app.handlers import handle_message
 from app.scheduler import send_weekly_summaries
 
-
-scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Kolkata"))
-
+# Basic logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Env vars from Render
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")  # Render injects this
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")  # Render provides your external URL
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 
-# Build PTB application (async)
+# Build PTB Application
 application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+# APScheduler (runs in the asyncio event loop)
+scheduler = AsyncIOScheduler(timezone=ZoneInfo("Asia/Kolkata"))
+
 async def set_webhook():
+    """Register HTTPS webhook with Telegram to your public Render URL."""
     url = f"{RENDER_URL}{WEBHOOK_PATH}"
     logger.info(f"Setting webhook to {url}")
     await application.bot.set_webhook(url)
 
 async def on_startup():
-    # IMPORTANT: initialize and start the PTB application
-   
-await application.initialize()
+    """Startup hook: initialize/start bot, set webhook, start scheduler."""
+    await application.initialize()
     await application.start()
     await set_webhook()
 
-    # TEMP test: run every 2 minutes
+    # ---- TEMP: fire every 2 minutes to verify summaries ----
     scheduler.add_job(
         send_weekly_summaries,
         "interval",
@@ -49,15 +53,18 @@ await application.initialize()
         replace_existing=True,
     )
     scheduler.start()
-
-
+    logger.info("Scheduler started (2-minute test job active).")
 
 async def on_shutdown():
-    # IMPORTANT: stop & shutdown
+    """Shutdown hook: stop scheduler and bot cleanly."""
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        pass
     await application.stop()
     await application.shutdown()
 
-# Health endpoint for Render + UptimeRobot
+# Health endpoint (Render & UptimeRobot)
 async def health(_: Request):
     return PlainTextResponse("OK")
 
@@ -65,7 +72,6 @@ async def health(_: Request):
 async def webhook(request: Request):
     data = await request.json()
     update = Update.de_json(data, application.bot)
-    # process_update is safe now that initialize/start ran
     await application.process_update(update)
     return JSONResponse({"status": "processed"})
 
