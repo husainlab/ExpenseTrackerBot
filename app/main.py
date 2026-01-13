@@ -29,7 +29,7 @@ async def startup():
     await tg_app.initialize()
     await tg_app.start()
     await tg_app.bot.set_webhook(f"{RENDER_URL}{WEBHOOK_PATH}")
-    await application.bot.set_my_commands([]) #remove this line once '/' menu disappears
+    await tg_app.bot.set_my_commands([]) #remove this line once '/' menu disappears
     scheduler.add_job(
         send_weekly_summaries,
         "cron",
